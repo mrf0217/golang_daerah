@@ -1,0 +1,28 @@
+package entities
+
+type TrafficTicket struct {
+	ID                         int     `json:"id"`
+	DetectedSpeed              float64 `json:"detected_speed"`
+	LegalSpeed                 float64 `json:"legal_speed"`
+	ViolationLocation          string  `json:"violation_location"`
+	ViolationDate              string  `json:"violation_date"`
+	ViolationTime              string  `json:"violation_time"`
+	ViolationType              string  `json:"violation_type"`
+	LicensePlateNumber         string  `json:"license_plate_number"`
+	VehicleProductionID        string  `json:"vehicle_production_id"`
+	VehicleFactory             string  `json:"vehicle_factory"`
+	VehicleModel               string  `json:"vehicle_model"`
+	VehicleColor               string  `json:"vehicle_color"`
+	VehicleBrand               string  `json:"vehicle_brand"`
+	OfficerName                string  `json:"officer_name"`
+	OfficerID                  string  `json:"officer_id"`
+	OfficerRank                string  `json:"officer_rank"`
+	SuspectName                string  `json:"suspect_name"`
+	SuspectID                  string  `json:"suspect_id"`
+	SuspectAge                 int     `json:"suspect_age"`
+	OfficerAge                 int     `json:"officer_age"`
+	SuspectJob                 string  `json:"suspect_job"`
+	SuspectAddress             string  `json:"suspect_address"`
+	SuspectBirthPlace          string  `json:"suspect_birth_place"`
+	OfficerBranchOfficeAddress string  `json:"officer_branch_office_address"`
+}

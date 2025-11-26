@@ -1,0 +1,28 @@
+CREATE TABLE passenger_plane (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    passenger_name VARCHAR(100) NOT NULL,
+    passenger_id VARCHAR(50) NOT NULL,
+    age INT NOT NULL,
+    gender VARCHAR(20) NOT NULL,
+    passport_number VARCHAR(50) NOT NULL,
+    nationality VARCHAR(50) NOT NULL,
+    flight_number VARCHAR(20) NOT NULL,
+    departure_airport VARCHAR(100) NOT NULL,
+    arrival_airport VARCHAR(100) NOT NULL,
+    departure_date VARCHAR(50) NOT NULL,
+    departure_time VARCHAR(50) NOT NULL,
+    arrival_time VARCHAR(50) NOT NULL,
+    seat_number VARCHAR(10) NOT NULL,
+    ticket_class VARCHAR(20) NOT NULL,
+    baggage_weight INT NOT NULL,
+    airline VARCHAR(100) NOT NULL,
+    gate VARCHAR(10) NOT NULL,
+    boarding_status VARCHAR(50) NOT NULL,
+    officer_name VARCHAR(100) NOT NULL,
+    officer_id VARCHAR(50) NOT NULL,
+    officer_rank VARCHAR(50) NOT NULL,
+    officer_branch_office_address TEXT NOT NULL,
+    checkin_counter VARCHAR(50) NOT NULL,
+    special_request TEXT NOT NULL
+);
+

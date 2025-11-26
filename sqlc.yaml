@@ -1,0 +1,58 @@
+version: "2"
+sql:
+  # PostgreSQL - Traffic Tickets
+  - engine: "postgresql"
+    queries: "sqlc/queries/postgres"
+    schema: "sqlc/schema/postgres"
+    gen:
+      go:
+        package: "postgresgen"
+        out: "internal/repository/generated/postgres"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+
+  # MySQL - Traffic Tickets
+  - engine: "mysql"
+    queries: "sqlc/queries/mysql"
+    schema: "sqlc/schema/mysql"
+    gen:
+      go:
+        package: "mysqlgen"
+        out: "internal/repository/generated/mysql"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+
+  # MySQL - Passenger Plane
+  - engine: "mysql"
+    queries: "sqlc/queries/passenger"
+    schema: "sqlc/schema/passenger"
+    gen:
+      go:
+        package: "passengergen"
+        out: "internal/repository/generated/passenger"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+
+  # MySQL - Laut/Terminal
+  - engine: "mysql"
+    queries: "sqlc/queries/laut"
+    schema: "sqlc/schema/laut"
+    gen:
+      go:
+        package: "lautgen"
+        out: "internal/repository/generated/laut"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+

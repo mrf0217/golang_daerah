@@ -1,0 +1,48 @@
+
+services:
+  app:
+    build: .
+    env_file:
+      - .env  # Load from .env file if it exists
+    environment:
+      # PostgreSQL Configuration (reads from .env or uses defaults)
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-mraffa0217}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      
+      # MySQL Configuration (reads from .env or uses defaults)
+      MYSQL_HOST: ${MYSQL_HOST:-host.docker.internal}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-traffic_tickets}
+      
+      # Passenger Plane MySQL Configuration (reads from .env or uses defaults)
+      PASSENGER_MYSQL_HOST: ${PASSENGER_MYSQL_HOST:-host.docker.internal}
+      PASSENGER_MYSQL_PORT: ${PASSENGER_MYSQL_PORT:-3307}
+      PASSENGER_MYSQL_USER: ${PASSENGER_MYSQL_USER:-root}
+      PASSENGER_MYSQL_PASSWORD: ${PASSENGER_MYSQL_PASSWORD:-}
+      PASSENGER_MYSQL_DATABASE: ${PASSENGER_MYSQL_DATABASE:-passenger}
+
+      LAUT_MYSQL_HOST: ${PASSENGER_MYSQL_HOST:-host.docker.internal}
+      LAUT_MYSQL_PORT: ${PASSENGER_MYSQL_PORT:-3308}
+      LAUT_MYSQL_USER: ${PASSENGER_MYSQL_USER:-root}
+      LAUT_MYSQL_PASSWORD: ${PASSENGER_MYSQL_PASSWORD:-}
+      LAUT_MYSQL_DATABASE: ${PASSENGER_MYSQL_DATABASE:-Laut}
+      
+      # Application Configuration (reads from .env or uses defaults)
+      APP_PORT: ${APP_PORT:-8080}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-100}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-10}
+      
+      # HTTP Server Timeouts (seconds) - prevents requests from hanging indefinitely
+      HTTP_READ_TIMEOUT_SECONDS: ${HTTP_READ_TIMEOUT_SECONDS:-15}
+      HTTP_WRITE_TIMEOUT_SECONDS: ${HTTP_WRITE_TIMEOUT_SECONDS:-15}
+      HTTP_IDLE_TIMEOUT_SECONDS: ${HTTP_IDLE_TIMEOUT_SECONDS:-60}
+      
+      # Database Query Timeout (seconds) - prevents slow queries from blocking connections
+      DB_QUERY_TIMEOUT_SECONDS: ${DB_QUERY_TIMEOUT_SECONDS:-10}
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
