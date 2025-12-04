@@ -13,16 +13,33 @@ import (
 	"errors"
 	"fmt"
 	"golang_daerah/config"
-	"golang_daerah/internal/entities"
+	// "golang_daerah/internal/entities"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/jmoiron/sqlx"
 
 	"golang_daerah/pkg/jwtutil"
 )
-
-type UserRepository struct {
-	DB *sql.DB
+type User struct {
+	ID           int    `json:"id"`
+	Username     string `json:"username"`
+	PasswordHash string `json:"-"`
 }
 
-func NewUserRepository(db *sql.DB) *UserRepository {
+type Credentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type Claims struct {
+	Username string `json:"username"`
+	jwt.RegisteredClaims
+}
+
+type UserRepository struct {
+	DB *sqlx.DB
+}
+
+func NewUserRepository(db *sqlx.DB) *UserRepository {
 	return &UserRepository{DB: db}
 }
 
@@ -48,13 +65,13 @@ func (r *UserRepository) CreateUser(username, passwordHash string) error {
 	return handleQueryError(err)
 }
 
-func (r *UserRepository) GetUserByUsername(username string) (*entities.User, error) {
+func (r *UserRepository) GetUserByUsername(username string) (*User, error) {
 	// Create context with timeout to prevent queries from hanging indefinitely
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
 
 	query := `SELECT id, username, password FROM users WHERE username = $1`
-	user := &entities.User{}
+	user := User{}
 	err := r.DB.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
 
 	if err == sql.ErrNoRows {
@@ -70,7 +87,7 @@ func (r *UserRepository) GetUserByUsername(username string) (*entities.User, err
 	}
 
 	fmt.Println("DEBUG: found user:", user.Username)
-	return user, nil
+	return &user, nil
 }
 
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +96,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var creds entities.Credentials
+	var creds Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		WriteBadRequest(w, "Invalid request body: "+err.Error())
 		return
@@ -99,7 +116,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var creds entities.Credentials
+	var creds Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		WriteBadRequest(w, "Invalid request body: "+err.Error())
 		return

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"golang_daerah/internal/entities"
+	
 	"golang_daerah/pkg/jwtutil"
 	"time"
 
@@ -95,7 +95,7 @@ func NewUserService(repo *UserRepository) *UserService {
 	return &UserService{Repo: repo}
 }
 
-func (s *UserService) Register(creds entities.Credentials) error {
+func (s *UserService) Register(creds Credentials) error {
 	if creds.Username == "" || creds.Password == "" {
 		return errors.New("username and password cannot be empty")
 	}
@@ -108,7 +108,7 @@ func (s *UserService) Register(creds entities.Credentials) error {
 	return s.Repo.CreateUser(creds.Username, string(hashedPassword))
 }
 
-func (s *UserService) Login(creds entities.Credentials) (string, error) {
+func (s *UserService) Login(creds Credentials) (string, error) {
 	user, err := s.Repo.GetUserByUsername(creds.Username)
 	if err != nil {
 		fmt.Println("DEBUG: repo error:", err)

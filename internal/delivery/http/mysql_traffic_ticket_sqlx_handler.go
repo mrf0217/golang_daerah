@@ -1,29 +1,60 @@
 package http
 
 import (
+	"context"
+	"encoding/json"
+	
+	"golang_daerah/config"
 	"io"
 	"net/http"
 	"strconv"
-
-	"context"
-	"encoding/json"
-	"golang_daerah/config"
 
 	"github.com/jmoiron/sqlx"
 )
 
 type MySQLTrafficTicketSQLXRepository struct {
-	db *sqlx.DB
+	*BaseMultiDBRepository
 }
 
-func NewMySQLTrafficTicketSQLXRepository(db *sqlx.DB) *MySQLTrafficTicketSQLXRepository {
-	return &MySQLTrafficTicketSQLXRepository{db: db}
+// func NewMySQLTrafficTicketSQLXRepository(db *sqlx.DB) *MySQLTrafficTicketSQLXRepository {
+// 	return &MySQLTrafficTicketSQLXRepository{
+// 		db: db,
+// 		dbs: initializeDatabasesTrafficSQL(),
+// 	}
+// }
+
+func initializeDatabasesTrafficSQL() map[string]*sqlx.DB {
+	dbs := make(map[string]*sqlx.DB)
+
+	// Default database
+	dbs["default"] = config.InitTerminalDBX()
+
+	// Add databases using existing config functions
+	dbs["passenger"] = config.InitPassengerPlaneDBX()
+	dbs["auth"] = config.InitAuthDBX()
+	dbs["traffic"] = config.InitTrafficDBX()
+	dbs["golang"] = config.InitGolangDBX()
+	dbs["mysql"] = config.InitMySQLDBX()
+	dbs["passanger"] = config.InitMySQLDBX_passanger()
+
+	// Want to add a new database? Just add it here:
+	// dbs["newdb"] = config.InitYourNewDBX()
+
+	return dbs
 }
 
-func (r *MySQLTrafficTicketSQLXRepository) GetPaginatedJSON(limit, offset int) ([]byte, error) {
+// func (r *MySQLTrafficTicketSQLXRepository) getDBTrafficSQL(dbName string) *sqlx.DB {
+// 	if db, exists := r.dbs[dbName]; exists {
+// 		return db
+// 	}
+// 	return r.dbs["default"]
+// }
+
+
+func (r *MySQLTrafficTicketSQLXRepository) GetPaginatedJSON_Traffic_SQL(limit, offset int, dbName string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
-
+	db := r.getDB(dbName)
 	query := `
         SELECT id, detected_speed, legal_speed, violation_location, 
                violation_date, violation_time, violation_type, 
@@ -37,7 +68,7 @@ func (r *MySQLTrafficTicketSQLXRepository) GetPaginatedJSON(limit, offset int) (
         LIMIT ? OFFSET ?
     `
 
-	rows, err := r.db.QueryxContext(ctx, query, limit, offset)
+	rows, err := db.QueryxContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, handleQueryError(err)
 	}
@@ -55,16 +86,45 @@ func (r *MySQLTrafficTicketSQLXRepository) GetPaginatedJSON(limit, offset int) (
 			}
 		}
 
+		for key, value := range row {
+			if b, ok := value.([]byte); ok {
+				row[key] = string(b)
+			}
+
+		}
+
+		portID := row["id"]
+
+		// HARDCODED - ALWAYS queries these 3 databases
+		passengers, _ := r.queryDB("passenger",
+			`SELECT passenger_name FROM passenger_plane WHERE port_id = ?`,
+			portID)
+
+		tickets, _ := r.queryDB("traffic",
+			`SELECT legal_speed FROM traffic_tickets WHERE port_id = ?`,
+			portID)
+
+		users, _ := r.queryDB("golang",
+			`SELECT username FROM users WHERE port_id = ?`,
+			portID)
+
+		// ALWAYS adds these fields
+		row["passengers"] = passengers
+		row["tickets"] = tickets
+		row["users"] = users
+		results = append(results, row)
+	
+
 		results = append(results, row)
 	}
 
 	return json.Marshal(results)
 }
 
-func (r *MySQLTrafficTicketSQLXRepository) InsertJSON(jsonData []byte) error {
+func (r *MySQLTrafficTicketSQLXRepository) InsertJSON_Traffic_SQL(jsonData []byte, dbName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
-
+	db := r.getDB(dbName)
 	var items []map[string]interface{}
 	if err := json.Unmarshal(jsonData, &items); err != nil {
 		return err
@@ -89,7 +149,7 @@ func (r *MySQLTrafficTicketSQLXRepository) InsertJSON(jsonData []byte) error {
     `
 
 	for _, item := range items {
-		if _, err := r.db.NamedExecContext(ctx, query, item); err != nil {
+		if _, err := db.NamedExecContext(ctx, query, item); err != nil {
 			return handleQueryError(err)
 		}
 	}
@@ -97,7 +157,7 @@ func (r *MySQLTrafficTicketSQLXRepository) InsertJSON(jsonData []byte) error {
 	return nil
 }
 
-func (h *MySQLTrafficTicketSQLXRepository) GetPaginated(w http.ResponseWriter, r *http.Request) {
+func (h *MySQLTrafficTicketSQLXRepository) GetPaginated_Traffic_SQL(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
 	if page <= 0 {
@@ -108,7 +168,7 @@ func (h *MySQLTrafficTicketSQLXRepository) GetPaginated(w http.ResponseWriter, r
 	}
 
 	offset := (page - 1) * perPage
-	jsonData, err := h.GetPaginatedJSON(perPage, offset)
+	jsonData, err := h.GetPaginatedJSON_Traffic_SQL(perPage, offset, "default")
 	if err != nil {
 		WriteInternalServerError(w, "Failed to get tickets: "+err.Error())
 		return
@@ -118,14 +178,14 @@ func (h *MySQLTrafficTicketSQLXRepository) GetPaginated(w http.ResponseWriter, r
 	w.Write(jsonData)
 }
 
-func (h *MySQLTrafficTicketSQLXRepository) Create(w http.ResponseWriter, r *http.Request) {
+func (h *MySQLTrafficTicketSQLXRepository) Create_Traffic_SQL(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		WriteBadRequest(w, "Invalid request body")
 		return
 	}
 
-	if err := h.InsertJSON(body); err != nil {
+	if err := h.InsertJSON_Traffic_SQL(body, "default"); err != nil {
 		WriteInternalServerError(w, "Failed to insert tickets: "+err.Error())
 		return
 	}

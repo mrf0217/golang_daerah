@@ -34,8 +34,8 @@ func main() {
 	trafficHandler := httpDelivery.NewPostgresTrafficTicketSQLXRepository(trafficDB)
 	mysqlHandler := httpDelivery.NewMySQLTrafficTicketSQLXRepository(mysqlDB)
 	passengerHandler := httpDelivery.NewPassengerPlaneSQLXRepository(passengerDB)
-	lautHandler := httpDelivery.NewLautRepository(terminalDB)
-	userRepo := httpDelivery.NewUserRepository(authDB.DB) // NEW: User repository using sql.DB
+	lautHandler := httpDelivery.LautSQLXRepository()
+	userRepo := httpDelivery.NewUserRepository(authDB) // NEW: User repository using sql.DB
 
 	// Initialize services
 	userService := httpDelivery.NewUserService(userRepo)
@@ -71,9 +71,9 @@ func main() {
 		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(passengerHandler.Create)))
 
 	router.HandleFunc("/api/terminals",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.GetPaginated)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.LautGetPaginated)))
 	router.HandleFunc("/api/terminals/create",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.Create)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.LautCreate)))
 	router.HandleFunc("/api/terminals/showall",
 		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.GetCompleteDataHandler)))
 
