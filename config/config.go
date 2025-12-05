@@ -1,8 +1,5 @@
+// config/config.go
 package config
-
-// Request Flow Link:
-// The init* functions in this package are called from main.go during startup to create
-// each database connection that the downstream repositories (and thus every request) depend on.
 
 import (
 	"database/sql"
@@ -14,58 +11,69 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
-// const (
-// 	defaultUser     = "postgres"
-// 	defaultPassword = "mraffa0217"
-// 	defaultHost     = "localhost" // Changed from "db" to "localhost"
-// 	defaultPort     = "5432"
-// 	defaultSSLMode  = "disable"
-// 	golangDB        = "golang"
-// 	trafficDB       = "traffic_ticket"
-// )
+// InitGolangDBX initializes PostgreSQL connection for golang database with sqlx
+func InitGolangDBX() *sqlx.DB {
+	user := getenv("DB_USER", "postgres")
+	pass := getenv("DB_PASSWORD", "mraffa0217")
+	host := getenv("DB_HOST", "localhost")
+	port := getenv("DB_PORT", "5432")
+	ssl := getenv("DB_SSLMODE", "disable")
 
-// InitDB initializes database connection with specified database name and optimized settings
-func InitDB(dbName string) *sql.DB {
-	user := getenv("DB_USER", "")
-	pass := getenv("DB_PASSWORD", "")
-	host := getenv("DB_HOST", "")
-	port := getenv("DB_PORT", "")
-	ssl := getenv("DB_SSLMODE", "")
-
-	// Auto-detect Docker environment and use host.docker.internal
 	if host == "localhost" && isRunningInDocker() {
 		host = "host.docker.internal"
 	}
 
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, dbName, ssl)
-	db, err := sql.Open("postgres", connStr)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=golang sslmode=%s",
+		host, port, user, pass, ssl)
+
+	db, err := sqlx.Connect("postgres", connStr)
 	if err != nil {
-		log.Fatal("Failed to open DB:", err)
+		log.Fatal("Failed to connect to golang DB:", err)
 	}
 
-	configureConnectionPool(db)
+	configureConnectionPool(db.DB)
+	log.Printf("Database connection established for golang with optimized pool settings")
 
-	if err = db.Ping(); err != nil {
-		log.Fatal("Failed to connect to postgres DB:", err)
-	}
-
-	log.Printf("Database connection established for %s with optimized pool settings", dbName)
 	return db
-
 }
 
-// initMySQLDB initializes a MySQL database connection using the provided prefix and display name
-func initMySQLDB(prefix, displayName string) *sql.DB {
-	host := getenv(prefix+"_HOST", "")
-	port := getenv(prefix+"_PORT", "")
-	user := getenv(prefix+"_USER", "")
-	password := getenv(prefix+"_PASSWORD", "")
-	database := getenv(prefix+"_DATABASE", "")
+// InitTrafficDBX initializes PostgreSQL connection for traffic_ticket database with sqlx
+func InitTrafficDBX() *sqlx.DB {
+	user := getenv("DB_USER", "postgres")
+	pass := getenv("DB_PASSWORD", "mraffa0217")
+	host := getenv("DB_HOST", "localhost")
+	port := getenv("DB_PORT", "5432")
+	ssl := getenv("DB_SSLMODE", "disable")
 
-	// Auto-detect Docker environment and use host.docker.internal
+	if host == "localhost" && isRunningInDocker() {
+		host = "host.docker.internal"
+	}
+
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=traffic_ticket sslmode=%s",
+		host, port, user, pass, ssl)
+
+	db, err := sqlx.Connect("postgres", connStr)
+	if err != nil {
+		log.Fatal("Failed to connect to traffic_ticket DB:", err)
+	}
+
+	configureConnectionPool(db.DB)
+	log.Printf("Database connection established for traffic_ticket with optimized pool settings")
+
+	return db
+}
+
+func InitMySQLDBX_passanger() *sqlx.DB {
+	host := getenv("MYSQL_HOST", "localhost")
+	port := getenv("MYSQL_PORT", "3306")
+	user := getenv("MYSQL_USER", "root")
+	password := getenv("MYSQL_PASSWORD", "")
+	database := getenv("MYSQL_DATABASE", "passanger")
+
 	if host == "localhost" && isRunningInDocker() {
 		host = "host.docker.internal"
 	}
@@ -73,46 +81,132 @@ func initMySQLDB(prefix, displayName string) *sql.DB {
 	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		user, password, host, port, database)
 
-	db, err := sql.Open("mysql", connStr)
+	db, err := sqlx.Connect("mysql", connStr)
 	if err != nil {
-		log.Fatalf("Failed to open %s DB: %v", displayName, err)
+		log.Fatalf("Failed to connect to MySQL DB: %v", err)
 	}
 
-	configureConnectionPool(db)
+	configureConnectionPool(db.DB)
+	log.Printf("MySQL connection established for %s with optimized pool settings", database)
 
-	if err = db.Ping(); err != nil {
-		log.Fatalf("Failed to connect to sql %s DB: %v", displayName, err)
-	}
-
-	log.Printf("%s connection established for %s with optimized pool settings", displayName, database)
 	return db
 }
 
-// InitGolangDB initializes connection to golang database (for user operations)
-func InitGolangDB() *sql.DB {
-	return InitDB("golang")
+// InitMySQLDBX initializes MySQL connection for traffic_tickets database with sqlx
+func InitMySQLDBX() *sqlx.DB {
+	host := getenv("MYSQL_HOST", "localhost")
+	port := getenv("MYSQL_PORT", "3306")
+	user := getenv("MYSQL_USER", "root")
+	password := getenv("MYSQL_PASSWORD", "")
+	database := getenv("MYSQL_DATABASE", "traffic_ticket")
+
+	if host == "localhost" && isRunningInDocker() {
+		host = "host.docker.internal"
+	}
+
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		user, password, host, port, database)
+
+	db, err := sqlx.Connect("mysql", connStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to MySQL DB: %v", err)
+	}
+
+	configureConnectionPool(db.DB)
+	log.Printf("MySQL connection established for %s with optimized pool settings", database)
+
+	return db
 }
 
-// InitTrafficDB initializes connection to traffic_ticket database (for traffic ticket operations)
-func InitTrafficDB() *sql.DB {
-	return InitDB("traffic_ticket")
+// InitPassengerPlaneDBX initializes MySQL connection for passenger database with sqlx
+func InitPassengerPlaneDBX() *sqlx.DB {
+	host := getenv("PASSENGER_MYSQL_HOST", "localhost")
+	port := getenv("PASSENGER_MYSQL_PORT", "3307")
+	user := getenv("PASSENGER_MYSQL_USER", "root")
+	password := getenv("PASSENGER_MYSQL_PASSWORD", "")
+	database := getenv("PASSENGER_MYSQL_DATABASE", "passenger")
+
+	if host == "localhost" && isRunningInDocker() {
+		host = "host.docker.internal"
+	}
+
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		user, password, host, port, database)
+
+	db, err := sqlx.Connect("mysql", connStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to Passenger Plane MySQL DB: %v", err)
+	}
+
+	configureConnectionPool(db.DB)
+	log.Printf("Passenger Plane MySQL connection established for %s with optimized pool settings", database)
+
+	return db
+}
+
+// InitTerminalDBX initializes MySQL connection for terminal database with sqlx
+func InitTerminalDBX() *sqlx.DB {
+	host := getenv("LAUT_MYSQL_HOST", "localhost")
+	port := getenv("LAUT_MYSQL_PORT", "3306")
+	user := getenv("LAUT_MYSQL_USER", "root")
+	password := getenv("LAUT_MYSQL_PASSWORD", "")
+	database := getenv("LAUT_MYSQL_DATABASE", "terminal")
+
+	if host == "localhost" && isRunningInDocker() {
+		host = "host.docker.internal"
+	}
+
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		user, password, host, port, database)
+
+	db, err := sqlx.Connect("mysql", connStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to terminal MySQL DB: %v", err)
+	}
+
+	configureConnectionPool(db.DB)
+	log.Printf("Terminal MySQL connection established for %s with optimized pool settings", database)
+
+	return db
+}
+
+// InitAuthDBX initializes MySQL connection for auth database with sqlx
+func InitAuthDBX() *sqlx.DB {
+	host := getenv("AUTH_MYSQL_HOST", "localhost")
+	port := getenv("AUTH_MYSQL_PORT", "3306")
+	user := getenv("AUTH_MYSQL_USER", "root")
+	password := getenv("AUTH_MYSQL_PASSWORD", "")
+	database := getenv("AUTH_MYSQL_DATABASE", "golang")
+
+	if host == "localhost" && isRunningInDocker() {
+		host = "host.docker.internal"
+	}
+
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		user, password, host, port, database)
+
+	db, err := sqlx.Connect("mysql", connStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to Auth MySQL DB: %v", err)
+	}
+
+	configureConnectionPool(db.DB)
+	log.Printf("Auth MySQL connection established for %s with optimized pool settings", database)
+
+	return db
 }
 
 // configureConnectionPool sets up shared connection pool settings
 func configureConnectionPool(db *sql.DB) {
-	db.SetMaxOpenConns(25)                 // Maximum number of open connections
-	db.SetMaxIdleConns(10)                 // Maximum number of idle connections
-	db.SetConnMaxLifetime(5 * time.Minute) // Maximum lifetime of a connection
-	db.SetConnMaxIdleTime(1 * time.Minute) // Maximum idle time of a connection
-	// Note: Go's database/sql doesn't have a direct "wait timeout" for connections
-	// Use context.WithTimeout in queries to add query-level timeouts
-	// HTTP server timeouts (in main.go) will cancel requests that wait too long
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(1 * time.Minute)
 }
 
 // GetQueryTimeout returns the query timeout duration from environment variable
-// This timeout applies to individual database queries to prevent slow queries from blocking connections
 func GetQueryTimeout() time.Duration {
-	timeoutSeconds := getenvInt("DB_QUERY_TIMEOUT_SECONDS", 10) // Default: 10 seconds
+	timeoutSeconds := getenvInt("DB_QUERY_TIMEOUT_SECONDS", 10)
 	return time.Duration(timeoutSeconds) * time.Second
 }
 
@@ -128,19 +222,7 @@ func getenvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-// InitMySQLDB initializes connection to MySQL database
-func InitMySQLDB() *sql.DB {
-	return initMySQLDB("MYSQL", "MySQL")
-}
-func InitTerminalDB() *sql.DB {
-	return initMySQLDB("LAUT_MYSQL", "terminal")
-}
-
-// InitPassengerPlaneDB initializes connection to passenger MySQL database (no password)
-func InitPassengerPlaneDB() *sql.DB {
-	return initMySQLDB("PASSENGER_MYSQL", "Passenger Plane MySQL")
-}
-
+// getenv retrieves string environment variable with fallback
 func getenv(key, def string) string {
 	v := os.Getenv(key)
 	if v == "" {
@@ -151,12 +233,10 @@ func getenv(key, def string) string {
 
 // isRunningInDocker detects if the application is running inside a Docker container
 func isRunningInDocker() bool {
-	// Check for Docker-specific files that exist in containers
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
 	}
 
-	// Check for Docker in cgroup
 	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
 		return strings.Contains(string(data), "docker")
 	}
