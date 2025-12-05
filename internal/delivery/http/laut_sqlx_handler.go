@@ -3,12 +3,11 @@ package http
 import (
 	"context"
 	"encoding/json"
-	
+
 	"golang_daerah/config"
 	"io"
 	"net/http"
 	"strconv"
-	
 
 	"github.com/jmoiron/sqlx"
 )
@@ -31,6 +30,14 @@ type LautSQLXRepository struct {
 // 	}
 // }
 
+func NewLautSQLXRepository() *LautSQLXRepository {
+	return &LautSQLXRepository{
+		BaseMultiDBRepository: &BaseMultiDBRepository{
+			dbs: LautinitializeDatabases(),
+		},
+	}
+}
+
 // ADD YOUR DATABASES HERE - Just call the config functions!
 func LautinitializeDatabases() map[string]*sqlx.DB {
 	dbs := make(map[string]*sqlx.DB)
@@ -51,7 +58,6 @@ func LautinitializeDatabases() map[string]*sqlx.DB {
 
 	return dbs
 }
-
 
 // -------------------------------------------------------------------------------------------
 // Extract database name from URL path
@@ -74,9 +80,10 @@ func LautinitializeDatabases() map[string]*sqlx.DB {
 //         return
 //     }
 
-//     w.Header().Set("Content-Type", "application/json")
-//     w.Write(jsonData)
-// }
+//	    w.Header().Set("Content-Type", "application/json")
+//	    w.Write(jsonData)
+//	}
+//
 // --------------------------------------------------------------------------------------------
 func (r *LautSQLXRepository) LautInsertJSON(jsonData []byte, dbName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
@@ -114,7 +121,34 @@ func (r *LautSQLXRepository) LautInsertJSON(jsonData []byte, dbName string) erro
 			return handleQueryError(err)
 		}
 	}
+	// for _, item := range items {
+	// 	// Insert into passenger database
+	// 	passengerData := map[string]interface{}{
+	// 		"passenger_name": item["suspect_name"],
+	// 		"port_id":        item["id"],
+	// 	}
+	// 	r.insertDB("passenger",
+	// 		`INSERT INTO passenger_plane (passenger_name, port_id) VALUES (:passenger_name, :port_id)`,
+	// 		passengerData)
 
+	// 	// Insert into traffic database
+	// 	trafficData := map[string]interface{}{
+	// 		"legal_speed": item["legal_speed"],
+	// 		"port_id":     item["id"],
+	// 	}
+	// 	r.insertDB("traffic",
+	// 		`INSERT INTO traffic_tickets (legal_speed, port_id) VALUES (:legal_speed, :port_id)`,
+	// 		trafficData)
+
+	// 	// Insert into golang/users database
+	// 	userData := map[string]interface{}{
+	// 		"username": item["officer_name"],
+	// 		"port_id":  item["id"],
+	// 	}
+	// 	r.insertDB("golang",
+	// 		`INSERT INTO users (username, port_id) VALUES (:username, :port_id)`,
+	// 		userData)
+	// }
 	return nil
 }
 
@@ -156,25 +190,25 @@ func (r *LautSQLXRepository) LautGetPaginatedJSON(limit, offset int, dbName stri
 
 		}
 
-		portID := row["id"]
+		// portID := row["id"]
 
-		// HARDCODED - ALWAYS queries these 3 databases
-		passengers, _ := r.queryDB("passenger",
-			`SELECT passenger_name FROM passenger_plane WHERE port_id = ?`,
-			portID)
+		// // HARDCODED - ALWAYS queries these 3 databases
+		// passengers, _ := r.queryDB("passenger",
+		// 	`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
+		// 	portID)
 
-		tickets, _ := r.queryDB("traffic",
-			`SELECT legal_speed FROM traffic_tickets WHERE port_id = ?`,
-			portID)
+		// tickets, _ := r.queryDB("traffic",
+		// 	`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
+		// 	portID)
 
-		users, _ := r.queryDB("golang",
-			`SELECT username FROM users WHERE port_id = ?`,
-			portID)
+		// users, _ := r.queryDB("golang",
+		// 	`SELECT username FROM users WHERE id = ?`,
+		// 	portID)
 
-		// ALWAYS adds these fields
-		row["passengers"] = passengers
-		row["tickets"] = tickets
-		row["users"] = users
+		// // ALWAYS adds these fields
+		// row["passengers"] = passengers
+		// row["tickets"] = tickets
+		// row["users"] = users
 		results = append(results, row)
 	}
 	return json.Marshal(results)
@@ -230,12 +264,17 @@ func (h *LautSQLXRepository) LautGetCompleteDataHandler(w http.ResponseWriter, r
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonData)
+	var data []map[string]interface{}
+	if err := json.Unmarshal(jsonData, &data); err != nil {
+		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
+		return
+	}
+
+	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
 }
 
 func (h *LautSQLXRepository) LautGetPaginated(w http.ResponseWriter, r *http.Request) {
-	
+
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
 	if page <= 0 {
@@ -246,15 +285,20 @@ func (h *LautSQLXRepository) LautGetPaginated(w http.ResponseWriter, r *http.Req
 	}
 	offset := (page - 1) * perPage
 
-
 	jsonData, err := h.LautGetPaginatedJSON(perPage, offset, "default")
 	if err != nil {
 		WriteInternalServerError(w, "Failed to get terminals: "+err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonData)
+	var data []map[string]interface{}
+	if err := json.Unmarshal(jsonData, &data); err != nil {
+		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
+		return
+	}
+
+	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
+
 }
 
 func (h *LautSQLXRepository) Create(w http.ResponseWriter, r *http.Request) {

@@ -31,11 +31,11 @@ func main() {
 	defer passangerlocalDB.Close()
 
 	// Initialize repositories
-	trafficHandler := httpDelivery.NewPostgresTrafficTicketSQLXRepository(trafficDB)
-	mysqlHandler := httpDelivery.NewMySQLTrafficTicketSQLXRepository(mysqlDB)
-	passengerHandler := httpDelivery.NewPassengerPlaneSQLXRepository(passengerDB)
-	lautHandler := httpDelivery.LautSQLXRepository()
-	userRepo := httpDelivery.NewUserRepository(authDB) // NEW: User repository using sql.DB
+	trafficHandler := httpDelivery.NewPostgresTrafficTicketSQLXRepository()
+	mysqlHandler := httpDelivery.NewMySQLTrafficTicketSQLXRepository()
+	passengerHandler := httpDelivery.NewPassengerPlaneSQLXRepository()
+	lautHandler := httpDelivery.NewLautSQLXRepository()
+	userRepo := httpDelivery.NewUserRepository() // NEW: User repository using sql.DB
 
 	// Initialize services
 	userService := httpDelivery.NewUserService(userRepo)
@@ -56,26 +56,26 @@ func main() {
 
 	// Register routes
 	router.HandleFunc("/api/traffic_tickets/postgres",
-		(jwtutil.AuthMiddleware(trafficHandler.GetPaginated)))
+		(jwtutil.AuthMiddleware(trafficHandler.GetPaginated_Traffic_Postgre)))
 	router.HandleFunc("/api/traffic_tickets/postgres_create",
-		jwtutil.AuthMiddleware(middleware.RateLimitMiddleware(100, 10)(trafficHandler.Create)))
+		jwtutil.AuthMiddleware(middleware.RateLimitMiddleware(100, 10)(trafficHandler.Create_Traffic_Postgre)))
 
 	router.HandleFunc("/api/traffic_tickets/mysql",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(mysqlHandler.GetPaginated)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(mysqlHandler.GetPaginated_Traffic_SQL)))
 	router.HandleFunc("/api/traffic_tickets/mysql_create",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(mysqlHandler.Create)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(mysqlHandler.Create_Traffic_SQL)))
 
 	router.HandleFunc("/api/passengers",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(passengerHandler.GetPaginated)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(passengerHandler.GetPaginated_Passenger_SQL)))
 	router.HandleFunc("/api/passengers/create",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(passengerHandler.Create)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(passengerHandler.Create_Passenger_SQL)))
 
 	router.HandleFunc("/api/terminals",
 		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.LautGetPaginated)))
 	router.HandleFunc("/api/terminals/create",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.LautCreate)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.Create)))
 	router.HandleFunc("/api/terminals/showall",
-		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.GetCompleteDataHandler)))
+		middleware.RateLimitMiddleware(100, 10)(jwtutil.AuthMiddleware(lautHandler.LautGetCompleteDataHandler)))
 
 	router.HandleFunc("/api/register",
 		middleware.RateLimitMiddleware(100, 10)(authHandler.Register))

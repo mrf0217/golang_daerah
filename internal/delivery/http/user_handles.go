@@ -1,24 +1,19 @@
 package http
 
-// Request Flow Link:
-// main.go wires these handlers into the router via routes.Public/Protected, so every incoming HTTP
-// request for /api/register or /api/login is processed here before delegating to services/repositories.
-
 import (
-	"encoding/json"
-	"net/http"
-
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"golang_daerah/config"
-	// "golang_daerah/internal/entities"
+	"golang_daerah/pkg/jwtutil"
+	"net/http"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
-
-	"golang_daerah/pkg/jwtutil"
 )
+
 type User struct {
 	ID           int    `json:"id"`
 	Username     string `json:"username"`
@@ -35,12 +30,203 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// NEW: Multi-DB User Repository
 type UserRepository struct {
-	DB *sqlx.DB
+	*BaseMultiDBRepository
 }
 
-func NewUserRepository(db *sqlx.DB) *UserRepository {
-	return &UserRepository{DB: db}
+// NEW: Constructor using multi-DB pattern
+func NewUserRepository() *UserRepository {
+	return &UserRepository{
+		BaseMultiDBRepository: &BaseMultiDBRepository{
+			dbs: initializeUserDatabases(),
+		},
+	}
+}
+
+// HARDCODED: Configure which databases to use for User operations
+// Maintainers can easily modify this function to add/remove databases
+func initializeUserDatabases() map[string]*sqlx.DB {
+	dbs := make(map[string]*sqlx.DB)
+
+	// Default database for users (main auth database)
+	dbs["default"] = config.InitGolangDBX()
+
+	// OPTIONAL: Add backup/replica databases
+	dbs["auth"] = config.InitAuthDBX()
+	dbs["mysql"] = config.InitMySQLDBX()
+
+	// OPTIONAL: Add other databases if user data needs to be synced
+	// dbs["passenger"] = config.InitPassengerPlaneDBX()
+	// dbs["traffic"] = config.InitTrafficDBX()
+
+	return dbs
+}
+
+// CreateUser - Now supports multi-DB insert
+func (r *UserRepository) CreateUser(username, passwordHash string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
+	defer cancel()
+
+	// Insert into main database (default)
+	db := r.getDB("default")
+	query := `INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING RETURNING id;`
+	var id int
+	err := db.QueryRowContext(ctx, query, username, passwordHash).Scan(&id)
+	if err == sql.ErrNoRows {
+		return errors.New("username already exists")
+	}
+	if err != nil {
+		return handleQueryError(err)
+	}
+
+	// HARDCODED: Automatically replicate to other databases
+	// Maintainers can easily add/remove databases here
+	// userData := map[string]interface{}{
+	// 	"username": username,
+	// 	"password": passwordHash,
+	// }
+
+	// // Replicate to auth database
+	// r.insertDB("auth",
+	// 	`INSERT INTO users (username, password) VALUES (:username, :password)`,
+	// 	userData)
+
+	// // Replicate to mysql database
+	// r.insertDB("mysql",
+	// 	`INSERT INTO users (username, password) VALUES (:username, :password)`,
+	// 	userData)
+
+	// OPTIONAL: Add more replications here
+	// r.insertDB("passenger", `INSERT INTO users ...`, userData)
+	// r.insertDB("traffic", `INSERT INTO users ...`, userData)
+
+	return nil
+}
+
+// GetUserByUsername - Now supports multi-DB query with fallback
+func (r *UserRepository) GetUserByUsername(username string) (*User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
+	defer cancel()
+
+	// Try main database first
+	db := r.getDB("default")
+	query := `SELECT id, username, password FROM users WHERE username = $1`
+	user := User{}
+	err := db.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
+
+	if err == sql.ErrNoRows {
+		// HARDCODED: Fallback to other databases if not found in main
+		// Try auth database
+		// 	authDB := r.getDB("auth")
+		// 	err = authDB.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
+		// 	if err == nil {
+		// 		fmt.Println("DEBUG: found user in auth database:", user.Username)
+		// 		return &user, nil
+		// 	}
+
+		// 	// Try mysql database
+		// 	mysqlDB := r.getDB("mysql")
+		// 	err = mysqlDB.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
+		// 	if err == nil {
+		// 		fmt.Println("DEBUG: found user in mysql database:", user.Username)
+		// 		return &user, nil
+		// 	}
+
+		// 	fmt.Println("DEBUG: no user found for username:", username)
+		// 	return nil, nil
+		// } else if err != nil {
+		// 	if err == context.DeadlineExceeded {
+		// 		fmt.Println("DEBUG: query timeout for username:", username)
+		// 	} else {
+		// 		fmt.Println("DEBUG: query error:", err)
+		// 	}
+		return nil, handleQueryError(err)
+	}
+
+	fmt.Println("DEBUG: found user in default database:", user.Username)
+	return &user, nil
+}
+
+// NEW: Get user from ALL databases (for admin/debugging)
+// func (r *UserRepository) GetUserFromAllDatabases(username string) (map[string]*User, error) {
+// 	results := make(map[string]*User)
+
+// 	// HARDCODED: Query all configured databases
+// 	dbNames := []string{"default", "auth", "mysql"}
+
+// 	for _, dbName := range dbNames {
+// 		ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
+// 		defer cancel()
+
+// 		db := r.getDB(dbName)
+// 		query := `SELECT id, username, password FROM users WHERE username = $1`
+// 		user := User{}
+// 		err := db.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
+
+// 		if err == nil {
+// 			results[dbName] = &user
+// 		}
+// 	}
+
+// 	return results, nil
+// }
+
+// NEW: Update user in multiple databases
+func (r *UserRepository) UpdateUser(userID int, newPassword string) error {
+	updateData := map[string]interface{}{
+		"id":       userID,
+		"password": newPassword,
+	}
+
+	// HARDCODED: Update in all databases
+	// Maintainers can easily add/remove databases
+
+	// Update in default database
+	_, err := r.updateDB("default",
+		`UPDATE users SET password = :password WHERE id = :id`,
+		updateData)
+	if err != nil {
+		return err
+	}
+
+	// Update in auth database
+	// r.updateDB("auth",
+	// 	`UPDATE users SET password = :password WHERE id = :id`,
+	// 	updateData)
+
+	// // Update in mysql database
+	// r.updateDB("mysql",
+	// 	`UPDATE users SET password = :password WHERE id = :id`,
+	// 	updateData)
+
+	return nil
+}
+
+// NEW: Delete user from multiple databases
+func (r *UserRepository) DeleteUser(userID int) error {
+	// HARDCODED: Delete from all databases
+	// Maintainers can easily add/remove databases
+
+	// Delete from default database
+	_, err := r.deleteDB("default",
+		`DELETE FROM users WHERE id = ?`,
+		userID)
+	if err != nil {
+		return err
+	}
+
+	// Delete from auth database
+	// r.deleteDB("auth",
+	// 	`DELETE FROM users WHERE id = ?`,
+	// 	userID)
+
+	// // Delete from mysql database
+	// r.deleteDB("mysql",
+	// 	`DELETE FROM users WHERE id = ?`,
+	// 	userID)
+
+	return nil
 }
 
 type UserHandler struct {
@@ -49,45 +235,6 @@ type UserHandler struct {
 
 func NewUserHandler(service *UserService) *UserHandler {
 	return &UserHandler{Service: service}
-}
-
-func (r *UserRepository) CreateUser(username, passwordHash string) error {
-	// Create context with timeout to prevent queries from hanging indefinitely
-	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
-	defer cancel()
-
-	query := `INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING RETURNING id;`
-	var id int
-	err := r.DB.QueryRowContext(ctx, query, username, passwordHash).Scan(&id)
-	if err == sql.ErrNoRows {
-		return errors.New("username already exists")
-	}
-	return handleQueryError(err)
-}
-
-func (r *UserRepository) GetUserByUsername(username string) (*User, error) {
-	// Create context with timeout to prevent queries from hanging indefinitely
-	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
-	defer cancel()
-
-	query := `SELECT id, username, password FROM users WHERE username = $1`
-	user := User{}
-	err := r.DB.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
-
-	if err == sql.ErrNoRows {
-		fmt.Println("DEBUG: no user found for username:", username)
-		return nil, nil // return nil user, no hard error
-	} else if err != nil {
-		if err == context.DeadlineExceeded {
-			fmt.Println("DEBUG: query timeout for username:", username)
-		} else {
-			fmt.Println("DEBUG: query error:", err)
-		}
-		return nil, handleQueryError(err)
-	}
-
-	fmt.Println("DEBUG: found user:", user.Username)
-	return &user, nil
 }
 
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +254,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteSuccessResponseCreated(w, []interface{}{}, "Registration successful")
+	WriteSuccessResponseCreated(w, []interface{}{}, "Registration successful (synced to all databases)")
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {

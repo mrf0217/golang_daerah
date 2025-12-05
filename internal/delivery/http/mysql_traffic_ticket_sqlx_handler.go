@@ -3,7 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
-	
+
 	"golang_daerah/config"
 	"io"
 	"net/http"
@@ -14,6 +14,14 @@ import (
 
 type MySQLTrafficTicketSQLXRepository struct {
 	*BaseMultiDBRepository
+}
+
+func NewMySQLTrafficTicketSQLXRepository() *MySQLTrafficTicketSQLXRepository {
+	return &MySQLTrafficTicketSQLXRepository{
+		BaseMultiDBRepository: &BaseMultiDBRepository{
+			dbs: initializeDatabasesTrafficSQL(),
+		},
+	}
 }
 
 // func NewMySQLTrafficTicketSQLXRepository(db *sqlx.DB) *MySQLTrafficTicketSQLXRepository {
@@ -49,7 +57,6 @@ func initializeDatabasesTrafficSQL() map[string]*sqlx.DB {
 // 	}
 // 	return r.dbs["default"]
 // }
-
 
 func (r *MySQLTrafficTicketSQLXRepository) GetPaginatedJSON_Traffic_SQL(limit, offset int, dbName string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
@@ -93,29 +100,28 @@ func (r *MySQLTrafficTicketSQLXRepository) GetPaginatedJSON_Traffic_SQL(limit, o
 
 		}
 
-		portID := row["id"]
+		// portID := row["id"]
 
-		// HARDCODED - ALWAYS queries these 3 databases
-		passengers, _ := r.queryDB("passenger",
-			`SELECT passenger_name FROM passenger_plane WHERE port_id = ?`,
-			portID)
+		// // HARDCODED - ALWAYS queries these 3 databases
+		// passengers, _ := r.queryDB("passenger",
+		// 	`SELECT passenger_name FROM passenger_plane WHERE port_id = ?`,
+		// 	portID)
 
-		tickets, _ := r.queryDB("traffic",
-			`SELECT legal_speed FROM traffic_tickets WHERE port_id = ?`,
-			portID)
+		// tickets, _ := r.queryDB("traffic",
+		// 	`SELECT legal_speed FROM traffic_tickets WHERE port_id = ?`,
+		// 	portID)
 
-		users, _ := r.queryDB("golang",
-			`SELECT username FROM users WHERE port_id = ?`,
-			portID)
+		// users, _ := r.queryDB("golang",
+		// 	`SELECT username FROM users WHERE port_id = ?`,
+		// 	portID)
 
-		// ALWAYS adds these fields
-		row["passengers"] = passengers
-		row["tickets"] = tickets
-		row["users"] = users
-		results = append(results, row)
-	
+		// // ALWAYS adds these fields
+		// row["passengers"] = passengers
+		// row["tickets"] = tickets
+		// row["users"] = users
 
 		results = append(results, row)
+
 	}
 
 	return json.Marshal(results)
@@ -153,6 +159,34 @@ func (r *MySQLTrafficTicketSQLXRepository) InsertJSON_Traffic_SQL(jsonData []byt
 			return handleQueryError(err)
 		}
 	}
+	// for _, item := range items {
+	// 	// Insert into passenger database
+	// 	passengerData := map[string]interface{}{
+	// 		"passenger_name": item["suspect_name"],
+	// 		"port_id":        item["id"],
+	// 	}
+	// 	r.insertDB("passenger",
+	// 		`INSERT INTO passenger_plane (passenger_name, port_id) VALUES (:passenger_name, :port_id)`,
+	// 		passengerData)
+
+	// 	// Insert into traffic database
+	// 	trafficData := map[string]interface{}{
+	// 		"legal_speed": item["legal_speed"],
+	// 		"port_id":     item["id"],
+	// 	}
+	// 	r.insertDB("traffic",
+	// 		`INSERT INTO traffic_tickets (legal_speed, port_id) VALUES (:legal_speed, :port_id)`,
+	// 		trafficData)
+
+	// 	// Insert into golang/users database
+	// 	userData := map[string]interface{}{
+	// 		"username": item["officer_name"],
+	// 		"port_id":  item["id"],
+	// 	}
+	// 	r.insertDB("golang",
+	// 		`INSERT INTO users (username, port_id) VALUES (:username, :port_id)`,
+	// 		userData)
+	// }
 
 	return nil
 }
@@ -174,8 +208,13 @@ func (h *MySQLTrafficTicketSQLXRepository) GetPaginated_Traffic_SQL(w http.Respo
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonData)
+	var data []map[string]interface{}
+	if err := json.Unmarshal(jsonData, &data); err != nil {
+		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
+		return
+	}
+
+	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
 }
 
 func (h *MySQLTrafficTicketSQLXRepository) Create_Traffic_SQL(w http.ResponseWriter, r *http.Request) {
