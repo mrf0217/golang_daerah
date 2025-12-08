@@ -1,19 +1,12 @@
-package http
+package service
 
 import (
-	"context"
 	"encoding/json"
-
-	"golang_daerah/config"
-	"io"
-	"net/http"
-	"strconv"
-
-	"github.com/jmoiron/sqlx"
+	"golang_daerah/internal/database"
 )
 
-type LautSQLXRepository struct {
-	*BaseMultiDBRepository
+type LautService struct {
+	db *database.BaseMultiDBRepository
 }
 
 // var joinQueries = map[string]string{
@@ -30,34 +23,30 @@ type LautSQLXRepository struct {
 // 	}
 // }
 
-func NewLautSQLXRepository() *LautSQLXRepository {
-	return &LautSQLXRepository{
-		BaseMultiDBRepository: &BaseMultiDBRepository{
-			dbs: LautinitializeDatabases(),
-		},
-	}
+func NewLautService(db *database.BaseMultiDBRepository) *LautService {
+	return &LautService{db: db}
 }
 
 // ADD YOUR DATABASES HERE - Just call the config functions!
-func LautinitializeDatabases() map[string]*sqlx.DB {
-	dbs := make(map[string]*sqlx.DB)
+// func LautinitializeDatabases() map[string]*sqlx.DB {
+// 	dbs := make(map[string]*sqlx.DB)
 
-	// Default database
-	dbs["default"] = config.InitTerminalDBX()
+// 	// Default database
+// 	dbs["default"] = config.InitTerminalDBX()
 
-	// Add databases using existing config functions
-	dbs["passenger"] = config.InitPassengerPlaneDBX()
-	dbs["auth"] = config.InitAuthDBX()
-	dbs["traffic"] = config.InitTrafficDBX()
-	dbs["golang"] = config.InitGolangDBX()
-	dbs["mysql"] = config.InitMySQLDBX()
-	dbs["passanger"] = config.InitMySQLDBX_passanger()
+// 	// Add databases using existing config functions
+// 	dbs["passenger"] = config.InitPassengerPlaneDBX()
+// 	dbs["auth"] = config.InitAuthDBX()
+// 	dbs["traffic"] = config.InitTrafficDBX()
+// 	dbs["golang"] = config.InitGolangDBX()
+// 	dbs["mysql"] = config.InitMySQLDBX()
+// 	dbs["passanger"] = config.InitMySQLDBX_passanger()
 
-	// Want to add a new database? Just add it here:
-	// dbs["newdb"] = config.InitYourNewDBX()
+// 	// Want to add a new database? Just add it here:
+// 	// dbs["newdb"] = config.InitYourNewDBX()
 
-	return dbs
-}
+// 	return dbs
+// }
 
 // -------------------------------------------------------------------------------------------
 // Extract database name from URL path
@@ -85,12 +74,7 @@ func LautinitializeDatabases() map[string]*sqlx.DB {
 //	}
 //
 // --------------------------------------------------------------------------------------------
-func (r *LautSQLXRepository) LautInsertJSON(jsonData []byte, dbName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
-	defer cancel()
-
-	db := r.getDB(dbName)
-
+func (r *LautService) Create(jsonData []byte) error {
 	var items []map[string]interface{}
 	if err := json.Unmarshal(jsonData, &items); err != nil {
 		return err
@@ -117,8 +101,8 @@ func (r *LautSQLXRepository) LautInsertJSON(jsonData []byte, dbName string) erro
     `
 
 	for _, item := range items {
-		if _, err := db.NamedExecContext(ctx, query, item); err != nil {
-			return handleQueryError(err)
+		if err := r.db.InsertDB("terminal", query, item); err != nil {
+			return err
 		}
 	}
 	// for _, item := range items {
@@ -152,10 +136,10 @@ func (r *LautSQLXRepository) LautInsertJSON(jsonData []byte, dbName string) erro
 	return nil
 }
 
-func (r *LautSQLXRepository) LautGetPaginatedJSON(limit, offset int, dbName string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
-	defer cancel()
-	db := r.getDB(dbName)
+func (r *LautService) GetPaginated(limit, offset int) ([]map[string]interface{}, error) {
+	// ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
+	// defer cancel()
+	// db := r.getDB(dbName)
 	query := `
         SELECT id, port_name, port_code, port_address, city, province, country,
                operator_name, operator_contact, harbor_master_name, harbor_master_id,
@@ -168,55 +152,83 @@ func (r *LautSQLXRepository) LautGetPaginatedJSON(limit, offset int, dbName stri
         ORDER BY id ASC
         LIMIT ? OFFSET ?
     `
-
-	rows, err := db.QueryxContext(ctx, query, limit, offset)
+	result, err:= r.db.QueryDB("terminal", query, limit, offset)
 	if err != nil {
-		return nil, handleQueryError(err)
+        return nil, err
+    }
+	//this for multiple db query
+	for i, port := range result {
+		// Database 2: Passengers
+		passengers, _ := r.db.QueryDB("passenger",
+			`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
+			port["id"])
+
+		// Database 3: Traffic tickets
+		tickets, _ := r.db.QueryDB("traffic",
+			`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
+			port["id"])
+
+		// Database 4: Auth/Users (if needed)
+		users, _ := r.db.QueryDB("golang",
+			`SELECT username FROM users WHERE id = ?`,
+			port["id"])
+
+		result[i]["passengers"] = passengers
+		result[i]["traffic_ticket"] = tickets
+		result[i]["golang"] = users
 	}
-	defer rows.Close()
 
-	var results []map[string]interface{}
-	for rows.Next() {
-		row := make(map[string]interface{})
-		if err := rows.MapScan(row); err != nil {
-			return nil, err
-		}
+	return result, nil
+	
 
-		// Convert []byte to string for all fields
-		for key, value := range row {
-			if b, ok := value.([]byte); ok {
-				row[key] = string(b)
-			}
+	// rows, err := r.db.QueryxContext("terminal", query, limit, offset)
+	// if err != nil {
+	// 	return nil, handleQueryError(err)
+	// }
+	// defer rows.Close()
 
-		}
+	// var results []map[string]interface{}
+	// for rows.Next() {
+	// 	row := make(map[string]interface{})
+	// 	if err := rows.MapScan(row); err != nil {
+	// 		return nil, err
+	// 	}
 
-		// portID := row["id"]
+	// 	// Convert []byte to string for all fields
+	// 	for key, value := range row {
+	// 		if b, ok := value.([]byte); ok {
+	// 			row[key] = string(b)
+	// 		}
 
-		// // HARDCODED - ALWAYS queries these 3 databases
-		// passengers, _ := r.queryDB("passenger",
-		// 	`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
-		// 	portID)
+	// 	}
 
-		// tickets, _ := r.queryDB("traffic",
-		// 	`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
-		// 	portID)
+	// portID := row["id"]
 
-		// users, _ := r.queryDB("golang",
-		// 	`SELECT username FROM users WHERE id = ?`,
-		// 	portID)
+	// // HARDCODED - ALWAYS queries these 3 databases
+	// passengers, _ := r.queryDB("passenger",
+	// 	`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
+	// 	portID)
 
-		// // ALWAYS adds these fields
-		// row["passengers"] = passengers
-		// row["tickets"] = tickets
-		// row["users"] = users
-		results = append(results, row)
-	}
-	return json.Marshal(results)
+	// tickets, _ := r.queryDB("traffic",
+	// 	`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
+	// 	portID)
+
+	// users, _ := r.queryDB("golang",
+	// 	`SELECT username FROM users WHERE id = ?`,
+	// 	portID)
+
+	// // ALWAYS adds these fields
+	// row["passengers"] = passengers
+	// row["tickets"] = tickets
+	// row["users"] = users
+	// results = append(results, row)
+	// }
+	// return json.Marshal(results)
 }
 
-func (r *LautSQLXRepository) LautGetCompleteData(limit, offset int) ([]byte, error) {
+func (r *LautService) GetCompleteData(limit, offset int) ([]map[string]interface{}, error) {
 	// Database 1: Ports
-	ports, err := r.queryDB("terminal",
+	ports, err := r.db.QueryDB("terminal",
 		`SELECT id, port_name FROM Laut LIMIT ? OFFSET ?`,
 		limit, offset)
 	if err != nil {
@@ -225,17 +237,17 @@ func (r *LautSQLXRepository) LautGetCompleteData(limit, offset int) ([]byte, err
 
 	for i, port := range ports {
 		// Database 2: Passengers
-		passengers, _ := r.queryDB("passenger",
+		passengers, _ := r.db.QueryDB("passenger",
 			`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
 			port["id"])
 
 		// Database 3: Traffic tickets
-		tickets, _ := r.queryDB("traffic",
+		tickets, _ := r.db.QueryDB("traffic",
 			`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
 			port["id"])
 
 		// Database 4: Auth/Users (if needed)
-		users, _ := r.queryDB("golang",
+		users, _ := r.db.QueryDB("golang",
 			`SELECT username FROM users WHERE id = ?`,
 			port["id"])
 
@@ -244,78 +256,78 @@ func (r *LautSQLXRepository) LautGetCompleteData(limit, offset int) ([]byte, err
 		ports[i]["golang"] = users
 	}
 
-	return json.Marshal(ports)
+	return ports, nil
 }
 
-func (h *LautSQLXRepository) LautGetCompleteDataHandler(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
-	if page <= 0 {
-		page = 1
-	}
-	if perPage <= 0 {
-		perPage = 10
-	}
+// func (h *LautSQLXRepository) LautGetCompleteDataHandler(w http.ResponseWriter, r *http.Request) {
+// 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+// 	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
+// 	if page <= 0 {
+// 		page = 1
+// 	}
+// 	if perPage <= 0 {
+// 		perPage = 10
+// 	}
 
-	offset := (page - 1) * perPage
-	jsonData, err := h.LautGetCompleteData(perPage, offset)
-	if err != nil {
-		WriteInternalServerError(w, "Failed to get complete data: "+err.Error())
-		return
-	}
+// 	offset := (page - 1) * perPage
+// 	jsonData, err := h.LautGetCompleteData(perPage, offset)
+// 	if err != nil {
+// 		WriteInternalServerError(w, "Failed to get complete data: "+err.Error())
+// 		return
+// 	}
 
-	var data []map[string]interface{}
-	if err := json.Unmarshal(jsonData, &data); err != nil {
-		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
-		return
-	}
+// 	var data []map[string]interface{}
+// 	if err := json.Unmarshal(jsonData, &data); err != nil {
+// 		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
+// 		return
+// 	}
 
-	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
-}
+// 	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
+// }
 
-func (h *LautSQLXRepository) LautGetPaginated(w http.ResponseWriter, r *http.Request) {
+// func (h *LautSQLXRepository) LautGetPaginated(w http.ResponseWriter, r *http.Request) {
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
-	if page <= 0 {
-		page = 1
-	}
-	if perPage <= 0 {
-		perPage = 10
-	}
-	offset := (page - 1) * perPage
+// 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+// 	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
+// 	if page <= 0 {
+// 		page = 1
+// 	}
+// 	if perPage <= 0 {
+// 		perPage = 10
+// 	}
+// 	offset := (page - 1) * perPage
 
-	jsonData, err := h.LautGetPaginatedJSON(perPage, offset, "default")
-	if err != nil {
-		WriteInternalServerError(w, "Failed to get terminals: "+err.Error())
-		return
-	}
+// 	jsonData, err := h.LautGetPaginatedJSON(perPage, offset, "default")
+// 	if err != nil {
+// 		WriteInternalServerError(w, "Failed to get terminals: "+err.Error())
+// 		return
+// 	}
 
-	var data []map[string]interface{}
-	if err := json.Unmarshal(jsonData, &data); err != nil {
-		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
-		return
-	}
+// 	var data []map[string]interface{}
+// 	if err := json.Unmarshal(jsonData, &data); err != nil {
+// 		WriteInternalServerError(w, "Failed to parse response: "+err.Error())
+// 		return
+// 	}
 
-	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
+// 	WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
 
-}
+// }
 
-func (h *LautSQLXRepository) Create(w http.ResponseWriter, r *http.Request) {
-	// dbName := extractDBName(r.URL.Path)
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		WriteBadRequest(w, "Invalid request body")
-		return
-	}
+// func (h *LautSQLXRepository) Create(w http.ResponseWriter, r *http.Request) {
+// 	// dbName := extractDBName(r.URL.Path)
+// 	body, err := io.ReadAll(r.Body)
+// 	if err != nil {
+// 		WriteBadRequest(w, "Invalid request body")
+// 		return
+// 	}
 
-	if err := h.LautInsertJSON(body, "default"); err != nil {
-		WriteInternalServerError(w, "Failed to insert terminals: "+err.Error())
-		return
-	}
+// 	if err := h.LautInsertJSON(body, "default"); err != nil {
+// 		WriteInternalServerError(w, "Failed to insert terminals: "+err.Error())
+// 		return
+// 	}
 
-	WriteSuccessResponseCreated(w, []interface{}{}, "Terminals created successfully")
-}
+// 	WriteSuccessResponseCreated(w, []interface{}{}, "Terminals created successfully")
+// }
 
 // func New(db *sqlx.DB) *LautSQLXRepository {
 // 	return &LautSQLXRepository{db: db}

@@ -1,4 +1,4 @@
-package http
+package response
 
 // Request Flow Link:
 // When main.go routes an HTTP request to a handler, that handler builds its JSON output through
@@ -6,15 +6,12 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
+	// "errors"
+	// "fmt"
 	"net/http"
-
-	
-	"golang_daerah/pkg/jwtutil"
-	"time"
-
-	"golang.org/x/crypto/bcrypt"
+	// "golang_daerah/pkg/jwtutil"
+	// "time"
+	// "golang.org/x/crypto/bcrypt"
 )
 
 // Response represents the standard API response structure
@@ -87,47 +84,47 @@ func WriteInternalServerError(w http.ResponseWriter, message string) {
 	WriteErrorResponse(w, http.StatusInternalServerError, message)
 }
 
-type UserService struct {
-	Repo *UserRepository
-}
+// type UserService struct {
+// 	Repo *UserRepository
+// }
 
-func NewUserService(repo *UserRepository) *UserService {
-	return &UserService{Repo: repo}
-}
+// func NewUserService(repo *UserRepository) *UserService {
+// 	return &UserService{Repo: repo}
+// }
 
-func (s *UserService) Register(creds Credentials) error {
-	if creds.Username == "" || creds.Password == "" {
-		return errors.New("username and password cannot be empty")
-	}
+// func (s *UserService) Register(creds Credentials) error {
+// 	if creds.Username == "" || creds.Password == "" {
+// 		return errors.New("username and password cannot be empty")
+// 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
+// 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return s.Repo.CreateUser(creds.Username, string(hashedPassword))
-}
+// 	return s.Repo.CreateUser(creds.Username, string(hashedPassword))
+// }
 
-func (s *UserService) Login(creds Credentials) (string, error) {
-	user, err := s.Repo.GetUserByUsername(creds.Username)
-	if err != nil {
-		fmt.Println("DEBUG: repo error:", err)
-		return "", errors.New("internal server error")
-	}
-	if user == nil {
-		fmt.Println("DEBUG: username not found:", creds.Username)
-		return "", errors.New("invalid username or password")
-	}
+// func (s *UserService) Login(creds Credentials) (string, error) {
+// 	user, err := s.Repo.GetUserByUsername(creds.Username)
+// 	if err != nil {
+// 		fmt.Println("DEBUG: repo error:", err)
+// 		return "", errors.New("internal server error")
+// 	}
+// 	if user == nil {
+// 		fmt.Println("DEBUG: username not found:", creds.Username)
+// 		return "", errors.New("invalid username or password")
+// 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(creds.Password)) != nil {
-		fmt.Println("DEBUG MISMATCH:", user.PasswordHash, creds.Password)
-		return "", errors.New("invalid username or password")
-	}
+// 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(creds.Password)) != nil {
+// 		fmt.Println("DEBUG MISMATCH:", user.PasswordHash, creds.Password)
+// 		return "", errors.New("invalid username or password")
+// 	}
 
-	token, err := jwtutil.GenerateToken(user.Username, time.Hour) //expired in 1 hour
-	if err != nil {
-		return "", err
-	}
+// 	token, err := jwtutil.GenerateToken(user.Username, time.Hour) //expired in 1 hour
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	return token, nil
-}
+// 	return token, nil
+// }

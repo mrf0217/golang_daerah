@@ -1,4 +1,4 @@
-package http
+package service
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"golang_daerah/config"
+	"golang_daerah/internal/database"
 	"golang_daerah/pkg/jwtutil"
 	"net/http"
 
@@ -32,36 +33,42 @@ type Claims struct {
 
 // NEW: Multi-DB User Repository
 type UserRepository struct {
-	*BaseMultiDBRepository
+	*database.BaseMultiDBRepository
 }
 
 // NEW: Constructor using multi-DB pattern
 func NewUserRepository() *UserRepository {
+	// Initialize databases for auth
+	dbConfigs := map[string]*sqlx.DB{
+		"default": config.InitGolangDBX(),
+		"auth":    config.InitAuthDBX(),
+	}
+
 	return &UserRepository{
-		BaseMultiDBRepository: &BaseMultiDBRepository{
-			dbs: initializeUserDatabases(),
+		BaseMultiDBRepository: &database.BaseMultiDBRepository{
+			dbs: dbConfigs,
 		},
 	}
 }
 
 // HARDCODED: Configure which databases to use for User operations
 // Maintainers can easily modify this function to add/remove databases
-func initializeUserDatabases() map[string]*sqlx.DB {
-	dbs := make(map[string]*sqlx.DB)
+// func initializeUserDatabases() map[string]*sqlx.DB {
+// 	dbs := make(map[string]*sqlx.DB)
 
-	// Default database for users (main auth database)
-	dbs["default"] = config.InitGolangDBX()
+// 	// Default database for users (main auth database)
+// 	dbs["default"] = config.InitGolangDBX()
 
-	// OPTIONAL: Add backup/replica databases
-	dbs["auth"] = config.InitAuthDBX()
-	dbs["mysql"] = config.InitMySQLDBX()
+// 	// OPTIONAL: Add backup/replica databases
+// 	dbs["auth"] = config.InitAuthDBX()
+// 	dbs["mysql"] = config.InitMySQLDBX()
 
-	// OPTIONAL: Add other databases if user data needs to be synced
-	// dbs["passenger"] = config.InitPassengerPlaneDBX()
-	// dbs["traffic"] = config.InitTrafficDBX()
+// 	// OPTIONAL: Add other databases if user data needs to be synced
+// 	// dbs["passenger"] = config.InitPassengerPlaneDBX()
+// 	// dbs["traffic"] = config.InitTrafficDBX()
 
-	return dbs
-}
+// 	return dbs
+// }
 
 // CreateUser - Now supports multi-DB insert
 func (r *UserRepository) CreateUser(username, passwordHash string) error {
