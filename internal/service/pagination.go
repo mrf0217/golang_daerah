@@ -1,4 +1,4 @@
-package http
+package service
 
 // Request Flow Link:
 // Database-facing methods that are invoked when main.go routes reach repository instances

@@ -1,4 +1,4 @@
-package http
+package database
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func convertToPostgresPlaceholders(query string) string {
 }
 
 // QueryDB executes a query on a specific database
-func (r *BaseMultiDBRepository) queryDB(dbName, query string, args ...interface{}) ([]map[string]interface{}, error) {
+func (r *BaseMultiDBRepository) QueryDB(dbName, query string, args ...interface{}) ([]map[string]interface{}, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
 
@@ -62,7 +62,7 @@ func (r *BaseMultiDBRepository) queryDB(dbName, query string, args ...interface{
 	return results, nil
 }
 
-func (r *BaseMultiDBRepository) insertDB(dbName, query string, data map[string]interface{}) error {
+func (r *BaseMultiDBRepository) InsertDB(dbName, query string, data map[string]interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
 
@@ -105,7 +105,7 @@ func (r *BaseMultiDBRepository) insertDB(dbName, query string, data map[string]i
 
 // ==================== UPDATE HELPER ====================
 // updateDB - Helper for UPDATE queries with named parameters
-func (r *BaseMultiDBRepository) updateDB(dbName, query string, data map[string]interface{}) (int64, error) {
+func (r *BaseMultiDBRepository) UpdateDB(dbName, query string, data map[string]interface{}) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
 
@@ -155,7 +155,7 @@ func (r *BaseMultiDBRepository) updateDB(dbName, query string, data map[string]i
 
 // ==================== DELETE HELPER ====================
 // deleteDB - Helper for DELETE queries with positional parameters
-func (r *BaseMultiDBRepository) deleteDB(dbName, query string, args ...interface{}) (int64, error) {
+func (r *BaseMultiDBRepository) DeleteDB(dbName, query string, args ...interface{}) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.GetQueryTimeout())
 	defer cancel()
 
@@ -214,4 +214,11 @@ func (r *BaseMultiDBRepository) getDB(dbName string) *sqlx.DB {
 		return db
 	}
 	return r.dbs["default"]
+}
+
+func handleQueryError(err error) error {
+	if err == context.DeadlineExceeded {
+		return fmt.Errorf("database query timeout: request took too long")
+	}
+	return err
 }
