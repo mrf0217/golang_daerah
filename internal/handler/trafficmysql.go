@@ -8,15 +8,15 @@ import (
 	"strconv"
 )
 
-type MySQLTrafficTicketService struct {
-	service *service.LautService
+type MySQLTrafficTicketHandler struct {
+	service *service.MySQLTrafficTicketService
 }
 
-func NewTrafficMySQLHandler(service *service.LautService) *LautHandler {
-	return &LautHandler{service: service}
+func NewTrafficMySQLHandler(service *service.MySQLTrafficTicketService) *MySQLTrafficTicketHandler {
+	return &MySQLTrafficTicketHandler{service: service}
 }
 
-func (h *MySQLTrafficTicketService) GetPaginated(w http.ResponseWriter, r *http.Request) {
+func (h *MySQLTrafficTicketHandler) GetPaginated(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("perPage"))
 	if page <= 0 {
@@ -42,7 +42,7 @@ func (h *MySQLTrafficTicketService) GetPaginated(w http.ResponseWriter, r *http.
 	response.WritePaginatedResponse(w, data, page, perPage, "Complete data retrieved successfully")
 }
 
-func (h *MySQLTrafficTicketService) Create(w http.ResponseWriter, r *http.Request) {
+func (h *MySQLTrafficTicketHandler) Create(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		response.WriteBadRequest(w, "Invalid request body")

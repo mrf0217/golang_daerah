@@ -1,24 +1,17 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"golang_daerah/internal/database"
-	"golang_daerah/config"
-	"io"
-	"net/http"
-	"strconv"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type MySQLTrafficTicketService struct {
 	db *database.BaseMultiDBRepository
 }
 
-func NewMySQLTrafficTicketService(db *database.BaseMultiDBRepository) *MySQLTrafficTicketService{
+func NewMySQLTrafficTicketService(db *database.BaseMultiDBRepository) *MySQLTrafficTicketService {
 	return &MySQLTrafficTicketService{
-		db: db
+		db: db,
 	}
 }
 
@@ -78,26 +71,26 @@ func (r *MySQLTrafficTicketService) GetPaginated(limit, offset int) ([]map[strin
 		return nil, err
 	}
 
-	for i, port := range result {
-		// Database 2: Passengers
-		passengers, _ := r.db.QueryDB("passenger",
-			`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
-			port["id"])
+	// for i, port := range result {
+	// 	// Database 2: Passengers
+	// 	passengers, _ := r.db.QueryDB("passenger",
+	// 		`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
+	// 		port["id"])
 
-		// Database 3: Traffic tickets
-		tickets, _ := r.db.QueryDB("traffic",
-			`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
-			port["id"])
+	// 	// Database 3: Traffic tickets
+	// 	tickets, _ := r.db.QueryDB("traffic",
+	// 		`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
+	// 		port["id"])
 
-		// Database 4: Auth/Users (if needed)
-		users, _ := r.db.QueryDB("golang",
-			`SELECT username FROM users WHERE id = ?`,
-			port["id"])
+	// 	// Database 4: Auth/Users (if needed)
+	// 	users, _ := r.db.QueryDB("golang",
+	// 		`SELECT username FROM users WHERE id = ?`,
+	// 		port["id"])
 
-		result[i]["passengers"] = passengers
-		result[i]["traffic_ticket"] = tickets
-		result[i]["golang"] = users
-	}
+	// 	result[i]["passengers"] = passengers
+	// 	result[i]["traffic_ticket"] = tickets
+	// 	result[i]["golang"] = users
+	// }
 
 	return result, nil
 	// defer rows.Close()
@@ -121,25 +114,25 @@ func (r *MySQLTrafficTicketService) GetPaginated(limit, offset int) ([]map[strin
 
 	// 	}
 
-		// portID := row["id"]
+	// portID := row["id"]
 
-		// // HARDCODED - ALWAYS queries these 3 databases
-		// passengers, _ := r.queryDB("passenger",
-		// 	`SELECT passenger_name FROM passenger_plane WHERE port_id = ?`,
-		// 	portID)
+	// // HARDCODED - ALWAYS queries these 3 databases
+	// passengers, _ := r.queryDB("passenger",
+	// 	`SELECT passenger_name FROM passenger_plane WHERE port_id = ?`,
+	// 	portID)
 
-		// tickets, _ := r.queryDB("traffic",
-		// 	`SELECT legal_speed FROM traffic_tickets WHERE port_id = ?`,
-		// 	portID)
+	// tickets, _ := r.queryDB("traffic",
+	// 	`SELECT legal_speed FROM traffic_tickets WHERE port_id = ?`,
+	// 	portID)
 
-		// users, _ := r.queryDB("golang",
-		// 	`SELECT username FROM users WHERE port_id = ?`,
-		// 	portID)
+	// users, _ := r.queryDB("golang",
+	// 	`SELECT username FROM users WHERE port_id = ?`,
+	// 	portID)
 
-		// // ALWAYS adds these fields
-		// row["passengers"] = passengers
-		// row["tickets"] = tickets
-		// row["users"] = users
+	// // ALWAYS adds these fields
+	// row["passengers"] = passengers
+	// row["tickets"] = tickets
+	// row["users"] = users
 
 	// 	results = append(results, row)
 
@@ -176,7 +169,7 @@ func (r *MySQLTrafficTicketService) Create(jsonData []byte) error {
     `
 
 	for _, item := range items {
-		if _, err := r.db.InsertDB("mysql", query, item); err != nil {
+		if err := r.db.InsertDB("mysql", query, item); err != nil {
 			return err
 		}
 	}

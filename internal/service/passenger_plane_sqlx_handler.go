@@ -53,31 +53,31 @@ func (r *PassengerPlaneService) GetPaginated(limit, offset int) ([]map[string]in
         LIMIT ? OFFSET ?
     `
 
-	result, err := r.db.QueryDB("passenger ", query, limit, offset)
+	result, err := r.db.QueryDB("passenger", query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	for i, port := range result {
-		// Database 2: Passengers
-		passengers, _ := r.db.QueryDB("passenger",
-			`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
-			port["id"])
+	// for i, port := range result {
+	// 	// Database 2: Passengers
+	// 	passengers, _ := r.db.QueryDB("passenger",
+	// 		`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
+	// 		port["id"])
 
-		// Database 3: Traffic tickets
-		tickets, _ := r.db.QueryDB("traffic",
-			`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
-			port["id"])
+	// 	// Database 3: Traffic tickets
+	// 	tickets, _ := r.db.QueryDB("traffic",
+	// 		`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
+	// 		port["id"])
 
-		// Database 4: Auth/Users (if needed)
-		users, _ := r.db.QueryDB("golang",
-			`SELECT username FROM users WHERE id = ?`,
-			port["id"])
+	// 	// Database 4: Auth/Users (if needed)
+	// 	users, _ := r.db.QueryDB("golang",
+	// 		`SELECT username FROM users WHERE id = ?`,
+	// 		port["id"])
 
-		result[i]["passengers"] = passengers
-		result[i]["traffic_ticket"] = tickets
-		result[i]["golang"] = users
-	}
+	// 	result[i]["passengers"] = passengers
+	// 	result[i]["traffic_ticket"] = tickets
+	// 	result[i]["golang"] = users
+	// }
 
 	return result, nil
 	// defer rows.Close()
@@ -146,7 +146,7 @@ func (r *PassengerPlaneService) Create(jsonData []byte) error {
     `
 
 	for _, item := range items {
-		if _, err := r.db.InsertDB("passenger", query, item); err != nil {
+		if err := r.db.InsertDB("passenger", query, item); err != nil {
 			return err
 		}
 	}
