@@ -3,16 +3,18 @@ package service
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+
 	"errors"
 	"fmt"
 	"golang_daerah/config"
 	"golang_daerah/internal/database"
 	"golang_daerah/pkg/jwtutil"
-	"net/http"
+
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
@@ -46,7 +48,7 @@ func NewUserRepository() *UserRepository {
 
 	return &UserRepository{
 		BaseMultiDBRepository: &database.BaseMultiDBRepository{
-			dbs: dbConfigs,
+			Dbs: dbConfigs,
 		},
 	}
 }
@@ -76,7 +78,7 @@ func (r *UserRepository) CreateUser(username, passwordHash string) error {
 	defer cancel()
 
 	// Insert into main database (default)
-	db := r.getDB("default")
+	db := r.GetDB("default")
 	query := `INSERT INTO users (username, password) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING RETURNING id;`
 	var id int
 	err := db.QueryRowContext(ctx, query, username, passwordHash).Scan(&id)
@@ -117,7 +119,7 @@ func (r *UserRepository) GetUserByUsername(username string) (*User, error) {
 	defer cancel()
 
 	// Try main database first
-	db := r.getDB("default")
+	db := r.GetDB("default")
 	query := `SELECT id, username, password FROM users WHERE username = $1`
 	user := User{}
 	err := db.QueryRowContext(ctx, query, username).Scan(&user.ID, &user.Username, &user.PasswordHash)
@@ -190,7 +192,7 @@ func (r *UserRepository) UpdateUser(userID int, newPassword string) error {
 	// Maintainers can easily add/remove databases
 
 	// Update in default database
-	_, err := r.updateDB("default",
+	_, err := r.UpdateDB("default",
 		`UPDATE users SET password = :password WHERE id = :id`,
 		updateData)
 	if err != nil {
@@ -216,7 +218,7 @@ func (r *UserRepository) DeleteUser(userID int) error {
 	// Maintainers can easily add/remove databases
 
 	// Delete from default database
-	_, err := r.deleteDB("default",
+	_, err := r.DeleteDB("default",
 		`DELETE FROM users WHERE id = ?`,
 		userID)
 	if err != nil {
@@ -236,67 +238,122 @@ func (r *UserRepository) DeleteUser(userID int) error {
 	return nil
 }
 
-type UserHandler struct {
-	Service *UserService
+type AuthService struct {
+	Repo *UserRepository
 }
 
-func NewUserHandler(service *UserService) *UserHandler {
-	return &UserHandler{Service: service}
+func NewAuthService(repo *UserRepository) *AuthService {
+	return &AuthService{Repo: repo}
 }
 
-func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		WriteMethodNotAllowed(w)
-		return
+// Register - Uses SINGLE database (original behavior)
+// Switch to CreateUserMultiDB if you want multi-database replication
+func (s *AuthService) Register(creds Credentials) error {
+	if creds.Username == "" || creds.Password == "" {
+		return errors.New("username and password are required")
 	}
 
-	var creds Credentials
-	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		WriteBadRequest(w, "Invalid request body: "+err.Error())
-		return
-	}
-
-	if err := h.Service.Register(creds); err != nil {
-		WriteBadRequest(w, err.Error())
-		return
-	}
-
-	WriteSuccessResponseCreated(w, []interface{}{}, "Registration successful (synced to all databases)")
-}
-
-func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		WriteMethodNotAllowed(w)
-		return
-	}
-
-	var creds Credentials
-	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		WriteBadRequest(w, "Invalid request body: "+err.Error())
-		return
-	}
-
-	token, err := h.Service.Login(creds)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
 	if err != nil {
-		WriteUnauthorized(w, err.Error())
-		return
+		return errors.New("failed to hash password")
 	}
 
-	WriteSuccessResponseOK(w, map[string]string{"token": token}, "Login successful")
+	// OPTION 1: Single database (current)
+	return s.Repo.CreateUser(creds.Username, string(hashedPassword))
+
+	// OPTION 2: Multiple databases (uncomment to enable)
+	// return s.Repo.CreateUserMultiDB(creds.Username, string(hashedPassword))
 }
 
-func (h *UserHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		WriteUnauthorized(w, "Authorization header required")
-		return
-	}
+// Login - Uses SINGLE database (original behavior)
+// Switch to GetUserByUsernameMultiDB if you want multi-database fallback
+func (s *AuthService) Login(creds Credentials) (string, error) {
+	// OPTION 1: Single database (current)
+	user, err := s.Repo.GetUserByUsername(creds.Username)
 
-	username, err := jwtutil.VerifyToken(authHeader)
+	// OPTION 2: Multiple databases with fallback (uncomment to enable)
+	// user, err := s.Repo.GetUserByUsernameMultiDB(creds.Username)
+
 	if err != nil {
-		WriteUnauthorized(w, "Invalid or expired token")
-		return
+		return "", errors.New("invalid credentials")
+	}
+	if user == nil {
+		return "", errors.New("invalid credentials")
 	}
 
-	WriteSuccessResponseOK(w, map[string]string{"username": username}, "Welcome, "+username+"!")
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(creds.Password)); err != nil {
+		return "", errors.New("invalid credentials")
+	}
+
+	token, err := jwtutil.GenerateToken(user.Username, time.Hour)
+	if err != nil {
+		return "", errors.New("failed to generate token")
+	}
+
+	return token, nil
 }
+
+// type UserHandler struct {
+// 	Service *UserRepository
+// }
+
+// func NewUserHandler(service *UserRepository) *UserHandler {
+// 	return &UserHandler{Service: service}
+// }
+
+// func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
+// 	if r.Method != http.MethodPost {
+// 		WriteMethodNotAllowed(w)
+// 		return
+// 	}
+
+// 	var creds Credentials
+// 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+// 		WriteBadRequest(w, "Invalid request body: "+err.Error())
+// 		return
+// 	}
+
+// 	if err := h.Service.Register(creds); err != nil {
+// 		WriteBadRequest(w, err.Error())
+// 		return
+// 	}
+
+// 	WriteSuccessResponseCreated(w, []interface{}{}, "Registration successful (synced to all databases)")
+// }
+
+// func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+// 	if r.Method != http.MethodPost {
+// 		WriteMethodNotAllowed(w)
+// 		return
+// 	}
+
+// 	var creds Credentials
+// 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+// 		WriteBadRequest(w, "Invalid request body: "+err.Error())
+// 		return
+// 	}
+
+// 	token, err := h.Service.Login(creds)
+// 	if err != nil {
+// 		WriteUnauthorized(w, err.Error())
+// 		return
+// 	}
+
+// 	WriteSuccessResponseOK(w, map[string]string{"token": token}, "Login successful")
+// }
+
+// func (h *UserHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+// 	authHeader := r.Header.Get("Authorization")
+// 	if authHeader == "" {
+// 		WriteUnauthorized(w, "Authorization header required")
+// 		return
+// 	}
+
+// 	username, err := jwtutil.VerifyToken(authHeader)
+// 	if err != nil {
+// 		WriteUnauthorized(w, "Invalid or expired token")
+// 		return
+// 	}
+
+// 	WriteSuccessResponseOK(w, map[string]string{"username": username}, "Welcome, "+username+"!")
+// }

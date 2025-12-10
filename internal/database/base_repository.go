@@ -10,7 +10,14 @@ import (
 
 // BaseMultiDBRepository provides reusable multi-database functionality
 type BaseMultiDBRepository struct {
-	dbs map[string]*sqlx.DB
+	Dbs map[string]*sqlx.DB
+}
+
+func (r *BaseMultiDBRepository) GetDB(dbName string) *sqlx.DB {
+	if db, exists := r.Dbs[dbName]; exists {
+		return db
+	}
+	return r.Dbs["default"]
 }
 
 // NewBaseMultiDBRepository creates a base repository with multiple database connections
@@ -210,10 +217,10 @@ func (r *BaseMultiDBRepository) getDBDriver(dbName string) string {
 
 // Get database by name
 func (r *BaseMultiDBRepository) getDB(dbName string) *sqlx.DB {
-	if db, exists := r.dbs[dbName]; exists {
+	if db, exists := r.Dbs[dbName]; exists {
 		return db
 	}
-	return r.dbs["default"]
+	return r.Dbs["default"]
 }
 
 func handleQueryError(err error) error {
