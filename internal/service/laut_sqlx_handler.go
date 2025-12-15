@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"golang_daerah/internal/database"
+	"fmt"
 )
 
 type LautService struct {
@@ -157,26 +158,26 @@ func (r *LautService) GetPaginated(limit, offset int) ([]map[string]interface{},
 		return nil, err
 	}
 	//this for multiple db query
-	// for i, port := range result {
-	// 	// Database 2: Passengers
-	// 	passengers, _ := r.db.QueryDB("passenger",
-	// 		`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
-	// 		port["id"])
+	for i, port := range result {
+		// Database 2: Passengers
+		passengers, _ := r.db.QueryDB("passenger",
+			`SELECT passenger_name FROM passenger_plane WHERE id = ?`,
+			port["id"])
 
-	// 	// Database 3: Traffic tickets
-	// 	tickets, _ := r.db.QueryDB("traffic",
-	// 		`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
-	// 		port["id"])
+		// Database 3: Traffic tickets
+		tickets, _ := r.db.QueryDB("traffic",
+			`SELECT legal_speed FROM traffic_tickets WHERE id = ?`,
+			port["id"])
 
-	// 	// Database 4: Auth/Users (if needed)
-	// 	users, _ := r.db.QueryDB("golang",
-	// 		`SELECT username FROM users WHERE id = ?`,
-	// 		port["id"])
+		// Database 4: Auth/Users (if needed)
+		users, _ := r.db.QueryDB("golang",
+			`SELECT username FROM users WHERE id = ?`,
+			port["id"])
 
-	// 	result[i]["passengers"] = passengers
-	// 	result[i]["traffic_ticket"] = tickets
-	// 	result[i]["golang"] = users
-	// }
+		result[i]["passengers"] = passengers
+		result[i]["traffic_ticket"] = tickets
+		result[i]["golang"] = users
+	}
 
 	return result, nil
 
@@ -373,3 +374,49 @@ func (r *LautService) GetCompleteData(limit, offset int) ([]map[string]interface
 // 	}
 // 	return json.Marshal(results)
 // }
+
+// internal/service/traffic_ticket_sqlx_handler.go
+func (r *LautService) GetPaginatedWithFilters(limit, offset int, filters map[string]string) ([]map[string]interface{}, error) {
+    query := `
+        SELECT id, detected_speed as kecepatan, legal_speed, violation_location, 
+               violation_date, violation_time, violation_type, 
+               license_plate_number, vehicle_production_id, vehicle_factory,
+               vehicle_model, vehicle_color, vehicle_brand, officer_name,
+               officer_id, officer_rank, suspect_name, suspect_id, 
+               suspect_age, officer_age, suspect_job, suspect_address,
+               suspect_birth_place, officer_branch_office_address
+        FROM traffic_tickets
+        WHERE 1=1
+    `
+    
+    args := []interface{}{}
+    
+    // Add dynamic filters for ANY column
+    for column, value := range filters {
+        // Security: Whitelist allowed columns (prevent SQL injection)
+        // allowedColumns := map[string]bool{
+		// 	"id": true,
+        //     "violation_location": true,
+        //     "violation_type": true,
+        //     "license_plate_number": true,
+        //     "vehicle_color": true,
+        //     "vehicle_brand": true,
+		// 	"vehicle_model": true,
+        //     "suspect_name": true,
+        //     "officer_name": true,
+        //     "suspect_job": true,
+        //     "suspect_address": true,
+        //     "suspect_birth_place": true,
+        // }
+        
+        // if allowedColumns[column] {
+            query += fmt.Sprintf(" AND %s = ?", column)
+            args = append(args, value)
+        // }
+    }
+    
+    query += " ORDER BY id ASC LIMIT ? OFFSET ?"
+    args = append(args, limit, offset)
+
+    return r.db.QueryDB("traffic", query, args...)
+}

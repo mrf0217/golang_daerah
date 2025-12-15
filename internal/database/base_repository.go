@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"golang_daerah/config"
-
+	"errors"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -46,7 +46,7 @@ func (r *BaseMultiDBRepository) QueryDB(dbName, query string, args ...interface{
 	}
 	rows, err := db.QueryxContext(ctx, query, args...)
 	if err != nil {
-		return nil, handleQueryError(err)
+		return nil, HandleQueryError(err)
 	}
 	defer rows.Close()
 
@@ -82,7 +82,7 @@ func (r *BaseMultiDBRepository) InsertDB(dbName, query string, data map[string]i
 
 	_, err := db.NamedExecContext(ctx, query, data)
 	if err != nil {
-		return handleQueryError(err)
+		return HandleQueryError(err)
 	}
 	return nil
 }
@@ -125,7 +125,7 @@ func (r *BaseMultiDBRepository) UpdateDB(dbName, query string, data map[string]i
 
 	result, err := db.NamedExecContext(ctx, query, data)
 	if err != nil {
-		return 0, handleQueryError(err)
+		return 0, HandleQueryError(err)
 	}
 
 	// Get number of rows affected
@@ -175,7 +175,7 @@ func (r *BaseMultiDBRepository) DeleteDB(dbName, query string, args ...interface
 
 	result, err := db.ExecContext(ctx, query, args...)
 	if err != nil {
-		return 0, handleQueryError(err)
+		return 0, HandleQueryError(err)
 	}
 
 	// Get number of rows affected
@@ -223,9 +223,16 @@ func (r *BaseMultiDBRepository) getDB(dbName string) *sqlx.DB {
 	return r.Dbs["default"]
 }
 
-func handleQueryError(err error) error {
+// func handleQueryError(err error) error {
+// 	if err == context.DeadlineExceeded {
+// 		return fmt.Errorf("database query timeout: request took too long")
+// 	}
+// 	return err
+// }
+
+func HandleQueryError(err error) error {
 	if err == context.DeadlineExceeded {
-		return fmt.Errorf("database query timeout: request took too long")
+		return errors.New("database query timeout: request took too long")
 	}
 	return err
 }

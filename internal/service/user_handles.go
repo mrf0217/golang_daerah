@@ -86,7 +86,7 @@ func (r *UserRepository) CreateUser(username, passwordHash string) error {
 		return errors.New("username already exists")
 	}
 	if err != nil {
-		return handleQueryError(err)
+		return database.HandleQueryError(err)
 	}
 
 	// HARDCODED: Automatically replicate to other databases
@@ -150,7 +150,7 @@ func (r *UserRepository) GetUserByUsername(username string) (*User, error) {
 		// 	} else {
 		// 		fmt.Println("DEBUG: query error:", err)
 		// 	}
-		return nil, handleQueryError(err)
+		return nil, database.HandleQueryError(err)
 	}
 
 	fmt.Println("DEBUG: found user in default database:", user.Username)
